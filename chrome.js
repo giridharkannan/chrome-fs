@@ -18,7 +18,7 @@ var O_RDWR = constants.O_RDWR || 0
 var O_SYNC = constants.O_SYNC || 0
 var O_TRUNC = constants.O_TRUNC || 0
 var O_WRONLY = constants.O_WRONLY || 0
-fds = {}
+var fds = {}
 var localAFS = null;
 var localFS = null;
 
