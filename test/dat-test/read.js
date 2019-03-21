@@ -1,6 +1,31 @@
 var test = require('tape').test
 var fs = require('../../chrome')
 
+test('read Sync', (t) => {
+    let fName = 'testread';
+    let data = 'hello worldy world';
+
+    try {
+        fs.writeFileSync(fName, data);
+        let fd = fs.openSync(fName, 'r');
+
+        let b = new Buffer(1024);
+        let read = fs.readSync(fd, b, 0, 11);
+        t.same(read, 11, 'read length is correct');
+        t.same(b.slice(0, 11), new Buffer('hello world'), 'buffer says hello world')
+
+        read = fs.readSync(fd, b, 0, 11);
+
+        t.same(read, 7, 'second read length is correct');
+        t.same(b.slice(0, 11), new Buffer('y worldorld'), 'second read text is correct');
+        fs.unlinkSync(fName);
+    } catch (err) {
+        t.notOk(!err, "Unknwown error " + err);
+    } finally {
+        t.end();
+    }
+})
+
 test('read', function (t) {
   fs.writeFile('/testread', 'hello worldy world', function (err) {
     t.ok(!err, 'no error on write file')
@@ -23,6 +48,31 @@ test('read', function (t) {
       })
     })
   })
+})
+
+test('read test 2 Sync', (t) => {
+    let fName = '/testread2';
+    let data = 'hello worldy world';
+
+    try {
+        fs.writeFileSync(fName, data);
+        let fd = fs.openSync(fName, 'r');
+
+        let b = new Buffer(1024);
+        let read = fs.readSync(fd, b, 0, 11, 0);
+        t.same(read, 11, 'read length is correct');
+        t.same(b.slice(0, 11), new Buffer('hello world'), 'read hello world');
+
+        read = fs.readSync(fd, b, 0, 11, 1);
+        t.same(read, 11, 'second read length 11');
+        t.same(b.slice(0, 11), new Buffer('ello worldy'), 'second read data is the same');
+
+        fs.unlinkSync(fName);
+    } catch (err) {
+        t.notOk(!err, "Unknwown error " + err);
+    } finally {
+        t.end();
+    }
 })
 
 test('read test 2', function (t) {

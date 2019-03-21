@@ -1,6 +1,20 @@
 var test = require('tape').test
 var fs = require('../../chrome')
 
+test('appendFile Sync', (t) => {
+    try {
+        let fName = '/test.txt';
+        fs.writeFileSync(fName, 'hello');
+        fs.appendFileSync(fName, ' world');
+        let data = fs.readFileSync(fName);
+        t.same(data.toString(), 'hello world')
+        fs.unlinkSync(fName);
+    } catch (err) {
+        t.ok(!err, 'Unknown err ' + err);
+    }
+    t.end();
+})
+
 test('appendFile', function (t) {
   fs.writeFile('/test.txt', 'hello', function (err) {
     t.notOk(err)

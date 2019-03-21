@@ -1,5 +1,20 @@
 var test = require('tape').test
 var fs = require('../../chrome')
+let util = require('./util')
+
+test('readFile Sync', (t) => {
+    try {
+        let fName = 'test.txt';
+        fs.writeFileSync(fName, 'hello');
+        let data = fs.readFileSync(fName);
+        t.ok(Buffer.isBuffer(data), 'Data is buffer');
+        t.same(data.toString(), 'hello');
+        fs.unlinkSync(fName);
+    } catch (err) {
+        t.ok(!err, 'Got error ' + err)
+    }
+    t.end();
+})
 
 test('readFile', function (t) {
   fs.writeFile('/test.txt', 'hello', function (err) {
@@ -16,6 +31,20 @@ test('readFile', function (t) {
   })
 })
 
+test('cannot readFile dir Sync', (t) => {
+    let dir = '/test';
+    let errMsg = 'Expected EISDIR exception';
+
+    try {
+        fs.mkdirSync(dir);
+        util.catchWrapper(t, 'EISDIR', errMsg, fs.readFileSync, dir);
+        fs.rmdirSync(dir);
+    } catch (err) {
+        t.ok(!err, 'Got error ' + err);
+    }
+    t.end();
+})
+
 test('cannot readFile dir', function (t) {
   fs.mkdir('/test', function () {
     fs.readFile('/test', function (err) {
@@ -28,6 +57,24 @@ test('cannot readFile dir', function (t) {
     })
   })
 })
+
+test('readFile + encoding Sync', (t) => {
+    let fName = 'foo.txt';
+    try {
+        fs.writeFileSync(fName, 'hello');
+
+        //hex
+        let data = fs.readFileSync(fName, { encoding: 'hex' });
+        t.same(data, '68656c6c6f', 'hex is equal');
+
+        //binary
+        data = fs.readFileSync(fName, { encoding: null });
+        t.same(data.toString(), 'hello', 'binary is equal');
+    } catch (err) {
+        t.ok(!err, 'Got error ' + err);
+    }
+    t.end();
+});
 
 test('readFile + encoding', function (t) {
   fs.writeFile('/foo.txt', 'hello', function (err) {

@@ -25,16 +25,16 @@ var path = require('path')
 var fs = require('../../chrome')
 var filepath = path.join(common.tmpDir, 'x.txt')
 var expected = 'xyz\n'
-
+var buffer = new Buffer(1024);
 fs.writeFile(filepath, expected, function (err) {
   assert.ok(!err)
   fs.open(filepath, 'r', '0644', function (err, fd) {
     assert.ok(!err)
-    // fs.read(fd, buffer, 0, 8192, -1, function (err, len, data) {
-    fs.read(fd, expected.length, 0, 'utf-8', function (err, str, bytesRead) {
+    fs.read(fd, buffer, 0, 8192, -1, function (err, len, data) {
+    // fs.read(fd, expected.length, 0, 'utf-8', function (err, str, bytesRead) {
       assert.ok(!err)
-      assert.equal(str, expected, 'read value failed')
-      assert.equal(bytesRead, expected.length, 'read length failed')
+      assert.equal(data, expected, 'read value failed')
+      assert.equal(len, expected.length, 'read length failed')
       fs.unlink(filepath, function (err) {
         assert.ok(!err)
         console.log('test-fs-read success')

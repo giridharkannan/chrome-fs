@@ -1,5 +1,19 @@
 var test = require('tape').test
 var fs = require('../../chrome')
+let util = require('./util');
+
+test('rmdir Sync', (t) => {
+    try {
+        util.catchWrapper(t, 'EPERM', 'Unexpected error', fs.rmdirSync, '/');
+        fs.mkdirSync('/foorm');
+        fs.rmdirSync('/foorm');
+        util.catchWrapper(t, 'ENOENT', 'Unexpected error', fs.rmdirSync, '/foorm');
+    } catch (err) {
+        t.ok(!err, "Unknown error "+err);
+    } finally {
+        t.end();
+    }
+})
 
 test('rmdir', function (t) {
   fs.rmdir('/', function (err) {

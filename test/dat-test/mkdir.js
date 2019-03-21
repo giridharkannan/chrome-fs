@@ -1,5 +1,29 @@
 var test = require('tape').test
 var fs = require('../../chrome')
+var util = require('./util')
+
+test('mkdir Sync', (t) => {
+    setTimeout(() => {
+    let path = '/fooSync/barSync';
+    try {
+        fs.mkdirSync(path);
+        t.notOk(true, 'Able to create multiple folders '+path);
+    } catch (err) {
+        t.ok(err, path + ' is an error');
+        t.same(err.code, 'ENOENT', path + ' should be no entry');
+
+        fs.mkdirSync('/fooSync');
+        fs.mkdirSync(path);
+
+        util.catchWrapper(t, 'EEXIST', 'Able to create already exisiting folder '+path, fs.mkdirSync, path);
+
+        fs.rmdirSync(path);
+        fs.rmdirSync('/fooSync')
+    } finally {
+        t.end();
+    }
+}, 2000);
+})
 
 test('mkdir', function (t) {
   fs.mkdir('/foo/bar', function (err) {
@@ -22,6 +46,22 @@ test('mkdir', function (t) {
   })
 })
 
+test('mkdir + stat Sync', (t) => {
+    try {
+        let dir = '/fooSync';
+        fs.mkdirSync(dir);
+        let stat = fs.statSync(dir);
+        t.same(stat.mode, '0777');
+        t.ok(stat.isDirectory());
+
+        fs.rmdirSync(dir);
+    } catch (err) {
+        t.ok(!err);
+    } finally {
+        t.end();
+    }
+})
+
 test('mkdir + stat', function (t) {
   fs.mkdir('/foo', function () {
     fs.stat('/foo', function (err, stat) {
@@ -32,6 +72,23 @@ test('mkdir + stat', function (t) {
     })
   })
 })
+
+test('mkdir with modes Sync', (t) => {
+    try {
+        let dir = '/fooSync';
+        fs.mkdirSync(dir, '0766');
+        let stat = fs.statSync(dir);
+        t.same(stat.mode, '0777');
+        t.ok(stat.isDirectory());
+
+        fs.rmdirSync(dir);
+    } catch (err) {
+        t.ok(!err);
+    } finally {
+        t.end();
+    }
+})
+
  // Mode will always default to '0777' on chrome OS
 test('mkdir with modes', function (t) {
   fs.mkdir('/foo', '0766', function () { // eslint-disable-line
