@@ -61,12 +61,12 @@ test('cannot readFile dir', function (t) {
 test('readFile + encoding Sync', (t) => {
     let fName = 'foo.txt';
     try {
-        let expected = '汉字漢字';
+        let expected = 'sync test 汉字漢字';
         fs.writeFileSync(fName, expected);
 
         //hex
         let data = fs.readFileSync(fName, { encoding: 'hex' });
-        t.same(data, 'e6b189e5ad97e6bca2e5ad97', 'hex is equal');
+        t.same(data, Buffer.from(expected, 'utf8').toString('hex'), 'hex is equal');
 
         //utf-8
         data = fs.readFileSync(fName, 'utf8');
@@ -82,14 +82,14 @@ test('readFile + encoding Sync', (t) => {
 });
 
 test('readFile + encoding', function (t) {
-    let expected = 'hello';
+    let expected = '汉字漢字 hello';
     fs.writeFile('/foo.txt', expected, function (err) {
         t.ok(!err, 'Created File /foo')
 
         //hex
         fs.readFile('/foo.txt', 'hex', function (err, data) {
             t.notOk(err, 'Error in hex')
-            t.same(data, '68656c6c6f', 'hex is equal')
+            t.same(data, Buffer.from(expected, 'utf8').toString('hex'), 'hex is equal')
 
             //utf-8
             fs.readFile('/foo.txt', 'utf-8', function (err, data) {

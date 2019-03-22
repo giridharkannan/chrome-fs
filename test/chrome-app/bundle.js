@@ -926,11 +926,8 @@ exports.readFile = function (path, options, cb) {
                             callback(evt, null)
                         }
 
-                        if (file.type === 'text/plain') {
-                            fileReader.readAsText(file)
-                        } else {
-                            fileReader.readAsArrayBuffer(file)
-                        }
+                        if (isTextEnc(encoding) && file.type === 'text/plain') fileReader.readAsText(file);
+                        else fileReader.readAsArrayBuffer(file);
                     })
                 }, function (err) {
                     if (err.name === 'TypeMismatchError') {
@@ -7082,38 +7079,6 @@ test('open mode "a" already existing', (t) => {
         })
     });
 })
-
-
-// test('open mode "a" already existing buffer flow', (t) => {
-//     let file = 'test4';
-//     let expected = 'new content';
-
-//     fs.writeFile(file, expected, (err) => {
-//         t.ok(!err, err);
-//         fs.readFile(file, 'utf8', (err, actual) => {
-//             t.ok(!err, err);
-//             t.same(actual, expected, 'content same');
-
-//             fs.open(file, 'a', (err, fd) => {
-//                 t.ok(!err, err);
-//                 t.same(typeof fd, 'object');
-//                 fs.write(fd, new Buffer(' append'), (err) => {
-//                     t.ok(!err, err);
-//                     fs.readFile(file, 'utf8', (err, actual) => {
-//                         t.ok(!err, err);
-//                         t.same(actual, expected + ' append', 'content same');
-
-//                         fs.unlink(file, (err) => {
-//                             t.ok(!err);
-//                             t.end();
-//                         })
-//                     })
-//                 })
-//             })
-
-//         })
-//     });
-// })
 },{"../../chrome":1,"tape":40}],56:[function(require,module,exports){
 (function (Buffer){
 var test = require('tape').test
@@ -7179,12 +7144,12 @@ test('cannot readFile dir', function (t) {
 test('readFile + encoding Sync', (t) => {
     let fName = 'foo.txt';
     try {
-        let expected = '汉字漢字';
+        let expected = 'sync test 汉字漢字';
         fs.writeFileSync(fName, expected);
 
         //hex
         let data = fs.readFileSync(fName, { encoding: 'hex' });
-        t.same(data, 'e6b189e5ad97e6bca2e5ad97', 'hex is equal');
+        t.same(data, Buffer.from(expected, 'utf8').toString('hex'), 'hex is equal');
 
         //utf-8
         data = fs.readFileSync(fName, 'utf8');
@@ -7200,14 +7165,14 @@ test('readFile + encoding Sync', (t) => {
 });
 
 test('readFile + encoding', function (t) {
-    let expected = 'hello';
+    let expected = '汉字漢字 hello';
     fs.writeFile('/foo.txt', expected, function (err) {
         t.ok(!err, 'Created File /foo')
 
         //hex
         fs.readFile('/foo.txt', 'hex', function (err, data) {
             t.notOk(err, 'Error in hex')
-            t.same(data, '68656c6c6f', 'hex is equal')
+            t.same(data, Buffer.from(expected, 'utf8').toString('hex'), 'hex is equal')
 
             //utf-8
             fs.readFile('/foo.txt', 'utf-8', function (err, data) {
@@ -7230,8 +7195,8 @@ test('readFile + encoding', function (t) {
     })
 })
 
-}).call(this,{"isBuffer":require("../../../../node/lib/node_modules/browserify/node_modules/is-buffer/index.js")})
-},{"../../../../node/lib/node_modules/browserify/node_modules/is-buffer/index.js":98,"../../chrome":1,"./util":64,"tape":40}],57:[function(require,module,exports){
+}).call(this,require("buffer").Buffer)
+},{"../../chrome":1,"./util":64,"buffer":90,"tape":40}],57:[function(require,module,exports){
 (function (Buffer){
 var test = require('tape').test
 var fs = require('../../chrome')

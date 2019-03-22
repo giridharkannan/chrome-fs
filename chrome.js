@@ -924,11 +924,8 @@ exports.readFile = function (path, options, cb) {
                             callback(evt, null)
                         }
 
-                        if (file.type === 'text/plain') {
-                            fileReader.readAsText(file)
-                        } else {
-                            fileReader.readAsArrayBuffer(file)
-                        }
+                        if (isTextEnc(encoding) && file.type === 'text/plain') fileReader.readAsText(file);
+                        else fileReader.readAsArrayBuffer(file);
                     })
                 }, function (err) {
                     if (err.name === 'TypeMismatchError') {
