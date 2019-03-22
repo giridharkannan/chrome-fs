@@ -65,7 +65,7 @@ function nullCheck(path, callback) {
     return true
 }
 
-function maybeCallback(cb) {
+function maybeCallback(cb) {    
     return util.isFunction(cb) ? cb : rethrow()
 }
 
@@ -83,6 +83,8 @@ function makeCallback(cb) {
     }
 }
 
+function noop() {}
+
 function rethrow() {
     // Only enable in debug mode. A backtrace uses ~1000 bytes of heap space and
     // is fairly slow to generate.
@@ -96,6 +98,8 @@ function rethrow() {
                 throw err
             }
         }
+    } else {
+        return noop;
     }
 }
 
@@ -467,10 +471,8 @@ exports.ftruncate = function (fd, len, callback) {
         len = 0
     }
     var cb = makeCallback(callback)
-    fd.onerror = cb
-    fd.onwriteend = function () {
-        cb()
-    }
+    fireDestroyErrCB(fd, cb);
+    fireDestroyEndCB(fd, cb);
     fd.truncate(len)
 }
 
@@ -496,14 +498,8 @@ exports.truncate = function (path, len, callback) {
 
     callback = maybeCallback(callback)
     exports.open(path, 'w', function (er, fd) {
-        if (er) return callback(er)
-        fd.onwriteend = function (evt) {
-            if (evt.type !== 'writeend') {
-                callback(evt)
-            } else {
-                callback()
-            }
-        }
+        if (er) return callback(er);
+        fireDestroyEndCB(fd, callback);
         fd.truncate(len)
     })
 }
@@ -658,38 +654,26 @@ function createFD(file, fullPath, flags) {
     return file;
 }
 
-function getFileWriterSync(fileEntry, flags) {
-    let fileWriter = fileEntry.createWriter();
-    return createFD(fileWriter, fileEntry.fullPath, flags);
-}
-
-function getFileSync(fileEntry) {
-    let file = fileEntry.file();
-    return createFD(file, fileEntry.fullPath);
-}
-
 function openFileSync(fileEntry, flags) {
     if (flags.indexOf('w') > -1 || flags.indexOf('a') > -1) {
-        return getFileWriterSync(fileEntry, flags);
+
+        let fileWriter = fileEntry.createWriter();
+        if(needTruncate(fileWriter, flags)) exports.ftruncateSync(fileWriter);
+        if(flags.indexOf('a') > -1) fileWriter.seek(fileWriter.length);
+
+        return createFD(fileWriter, fileEntry.fullPath, flags);
     } else {
-        return getFileSync(fileEntry);
+        return createFD(fileEntry.file(), fileEntry.fullPath);
     }
 }
 
 exports.openSync = (path, flags, mode) => {
-    let isEntry = false;
     nullCheck(path);
-    if (typeof path === 'object') {
-        isEntry = true;
-    } else {
-        path = resolve(path);
-    }
+    path = resolve(path);
     flags = flagToString(flags);
     mode = modeNum(mode, 438 /* =0666 */)
 
     try {
-        if (isEntry) return openFileSync(path, flags);
-
         let opts = {};
         flags.indexOf('w') > -1 && (opts.create = true);
         flags.indexOf('x') > -1 && (opts.exclusive = true);
@@ -708,32 +692,17 @@ exports.openSync = (path, flags, mode) => {
     }
 }
 
+function needTruncate(fileWriter, flags) {
+    return fileWriter.length > 0 && flags.indexOf('w') > -1;
+}
+
 exports.open = function (path, flags, mode, callback) {
-    var isEntry = false
-    if (!nullCheck(path, callback)) return
-    if (typeof path === 'object') {
-        isEntry = true
-    } else {
-        path = resolve(path)
-    }
+    if (!nullCheck(path, callback)) return;
+    path = resolve(path)
     flags = flagToString(flags)
     callback = makeCallback(arguments[arguments.length - 1])
     mode = modeNum(mode, 438 /* =0666 */)
-    // Allow for passing of fileentries to support external fs
-    if (isEntry) {
-        if (flags.indexOf('w') > -1 || flags.indexOf('a') > -1) {
-            path.createWriter(function (fileWriter) {
-                createFD(fileWriter, path.fullPath, flags);
-                callback(null, fileWriter)
-            }, callback)
-        } else {
-            path.file(function (file) {
-                createFD(file, path.fullPath);
-                callback(null, file)
-            })
-        }
-        return
-    }
+    
     getAsyncFS(
         function (cfs) {
             var opts = {}
@@ -751,8 +720,18 @@ exports.open = function (path, flags, mode, callback) {
                     // otherwise we get the file because 'standards'
                     if (flags.indexOf('w') > -1 || flags.indexOf('a') > -1) {
                         fileEntry.createWriter(function (fileWriter) {
-                            createFD(fileWriter, fileEntry.fullPath, flags);
-                            callback(null, fileWriter)
+                            function actualWork() {
+                                if(flags.indexOf('a') > -1) fileWriter.seek(fileWriter.length);
+                                createFD(fileWriter, fileEntry.fullPath, flags);
+                                callback(null, fileWriter);
+                            }
+                            if (needTruncate(fileWriter, flags)) exports.ftruncate(fileWriter, (err) => {
+                                if (!isNON(err)) return callback(err);
+                                else actualWork();
+                            });
+                            else {
+                                actualWork();
+                            }
                         }, callback)
                     } else {
                         fileEntry.file(function (file) {
@@ -833,6 +812,7 @@ exports.read = function (fd, buffer, offset, length, position, callback) {
         throw new TypeError('The buffer argument must be of type Buffer');
     }
     fd.onerror = function (err) {
+        fd.onerror = null;
         if (err.name === 'NotFoundError') {
             var enoent = new Error()
             enoent.code = 'ENOENT'
@@ -875,6 +855,21 @@ exports.read = function (fd, buffer, offset, length, position, callback) {
     }
 }
 
+function getEncData(data, encoding) {
+    encoding = encoding && encoding.toLocaleLowerCase();
+    if (encoding === null) {
+        return new Buffer(data, 'binary');
+    } else {
+        return new Buffer(data).toString(encoding);
+    }
+}
+
+function isTextEnc(encoding) {
+    if(isNON(encoding)) return false;
+    encoding = encoding.toLocaleLowerCase();
+    return encoding === 'utf8' || encoding === 'utf-8' || encoding === 'ascii';
+}
+
 exports.readFileSync = (path, options) => {
     options = options || { encoding: null, flag: 'r' };
     if (util.isString(options)) {
@@ -888,17 +883,11 @@ exports.readFileSync = (path, options) => {
     try {
         let file = getSyncFS().root.getFile(path, {}).file();
         let fileReader = new FileReaderSync();
-        let res = file.type === 'text/plain' ?
+        let res = isTextEnc(encoding) && file.type === 'text/plain' ?
             fileReader.readAsText(file) :
             fileReader.readAsArrayBuffer(file);
 
-        if (options.encoding === null) {
-            return new Buffer(res, 'binary');
-        } else if (options.encoding === 'hex') {
-            return new Buffer(res).toString('hex');
-        } else {
-            return res;
-        }
+        return getEncData(res, encoding);
     } catch (err) {
         if (err.name === 'TypeMismatchError') throw createFSErr('EISDIR');
         throw err;
@@ -928,13 +917,8 @@ exports.readFile = function (path, options, cb) {
                         fileEntry.onerror = callback
                         var fileReader = new FileReader() // eslint-disable-line
                         fileReader.onload = function (evt) {
-                            if (options.encoding === null) {
-                                window.setTimeout(callback, 0, null, new Buffer(this.result, 'binary'))
-                            } else if (options.encoding === 'hex') {
-                                window.setTimeout(callback, 0, null, new Buffer(this.result).toString('hex'))
-                            } else {
-                                window.setTimeout(callback, 0, null, this.result)
-                            }
+                            let res = getEncData(this.result, encoding);
+                            window.setTimeout(callback, 0, null, res);
                         }
                         fileReader.onerror = function (evt) {
                             callback(evt, null)
@@ -968,7 +952,6 @@ exports.writeSync = (fd, buffer, arg1, arg2, arg3) => {
         let bufblob = new Blob([tmpbuf], { type: 'application/octet-binary' });    
         
         !isNON(position) && fd.seek(position);
-        (fd.flags.indexOf('a') > -1) && fd.seek(fd.length);
         fd.write(bufblob);
         
         return tmpbuf.length;
@@ -982,10 +965,28 @@ exports.writeSync = (fd, buffer, arg1, arg2, arg3) => {
         let buf = new Buffer(buffer);
 
         !isNON(position) && fd.seek(position); //TODO: check append case
-        (fd.flags.indexOf('a') > -1) && fd.seek(fd.length);
 
         fd.write(blob);
         return buf.length;
+    }
+}
+
+function fireDestroyErrCB(fd, cb) {
+    fd.onerror = (err) => {
+        fd.onerror = null;
+        if(err) fd.onwriteend = null; //error must not bubble
+        cb(err);
+    }
+}
+
+function fireDestroyEndCB(fd, cb, ...args) {
+    fd.onwriteend = (ev) => {
+        fd.onwriteend = null;
+        if(ev.currentTarget && ev.currentTarget.error) {
+            cb(ev.currentTarget.error);
+        } else {
+            cb(null, ...args);
+        }
     }
 }
 
@@ -997,73 +998,63 @@ exports.write = function (fd, buffer, offset, length, position, callback) {
         }
         callback = maybeCallback(callback)
 
-        fd.onerror = callback
+        fireDestroyErrCB(fd, callback);
         fd.onprogress = function () { }
         var tmpbuf = buffer.slice(offset, length)
         var bufblob = new Blob([tmpbuf], { type: 'application/octet-binary' }) // eslint-disable-line
+        
+        function actualWrite() {
+            if (position !== null) fd.seek(position);
+            fireDestroyEndCB(fd, callback, tmpbuf.length, tmpbuf);
+            fd.write(bufblob);
+        }
+        
         if (fd.readyState === 1) {
-            // when the ready state is 1 we have to wait until the write end has finished
-            // but this causes the stream to keep sending write events.
-            // So currently fs and writestream have there own implementations
-            fd.onwriteend = function () {
-                if (position !== null) {
-                    fd.seek(position)
-                }
-                if (fd.flags.indexOf('a') > -1) {
-                    fd.seek(fd.length)
-                }
-                fd.write(bufblob)
-                callback(null, tmpbuf.length, tmpbuf)
-            }
+            fireDestroyEndCB(fd, (err) => {
+                if(err) callback(err);
+                else actualWrite();
+            });
         } else {
-            if (position !== null) {
-                fd.seek(position)
-            }
-            if (fd.flags.indexOf('a') > -1) {
-                fd.seek(fd.length)
-            }
-            fd.write(bufblob)
-            if (typeof callback === 'function') {
-                callback(null, tmpbuf.length, tmpbuf)
-            }
+            actualWrite();
         }
     } else {
+        // offset -> position, length -> encoding, position -> callback
+        // write(fd, buffer, offset, length, position, callback)
+        // write(fd, string[, position[, encoding]], callback)
         if (util.isString(buffer)) {
             buffer += ''
         }
+        
         if (!util.isFunction(position)) {
             if (util.isFunction(offset)) {
-                position = offset
-                offset = null
+                callback = offset;
+                offset = null;
+                position = null;
             } else {
-                position = length
+                position = offset;
+                callback = length
             }
-            length = 'utf8'
+            length = 'utf8';
         }
-        callback = maybeCallback(position)
-        fd.onerror = callback
+        callback = maybeCallback(callback)
+        fireDestroyErrCB(fd, callback);
         var blob = new Blob([buffer], { type: 'text/plain' }) // eslint-disable-line
 
         var buf = new Buffer(buffer)
 
+        function actualWrite() {
+            if (position !== null) fd.seek(position);
+            fireDestroyEndCB(fd, callback, buf.length);
+            fd.write(blob);
+        }
+
         if (fd.readyState === 1) {
-            fd.onwriteend = function () {
-                if (position !== null) {
-                    fd.seek(position)
-                }
-                fd.write(blob)
-                if (typeof callback === 'function') {
-                    callback(null, buf.length)
-                }
-            }
+            fireDestroyEndCB(fd, (err) =>  {
+                if(err) callback(err);
+                else actualWrite();
+            })
         } else {
-            if (position !== null) {
-                fd.seek(position)
-            }
-            fd.write(blob)
-            if (typeof callback === 'function') {
-                callback(null, buf.length)
-            }
+            actualWrite();
         }
     }
 }
@@ -1133,6 +1124,10 @@ exports.writeFileSync = (path, data, options) => {
 
     try {
         let fileWriter = cfs.root.getFile(path, opts).createWriter();
+        
+        //Have to truncate file
+        if(needTruncate(fileWriter, flag)) exports.ftruncateSync(fileWriter);
+
         if(flag.indexOf('a') > -1) fileWriter.seek(fileWriter.length);
 
         let blob;
@@ -1184,37 +1179,35 @@ exports.writeFile = function (path, data, options, cb) {
                     // otherwise we get the file because 'standards'
                     if (flag.indexOf('w') > -1 || flag.indexOf('a') > -1) {
                         fileEntry.createWriter(function (fileWriter) {
-                            fileWriter.onerror = callback
-                            // make sure we have an empty file
-                            // fileWriter.truncate(0)
-                            if (typeof callback === 'function') {
-                                fileWriter.onwriteend = function (evt) {
-                                    window.setTimeout(callback, 0)
-                                }
-                            } else {
-                                fileWriter.onwriteend = function () { }
-                            }
-                            fileWriter.onprogress = function () { }
-                            if(flag.indexOf('a') > -1) fileWriter.seek(fileWriter.length);
-                            var blob
-                            if (typeof data === 'string') {
-                                blob = new Blob([data], { type: 'text/plain' }) // eslint-disable-line
-                            } else {
-                                if (options.encoding === 'hex') {
-                                    // convert the hex data to a string then save it.
-                                    blob = new Blob([new Buffer(data, 'hex').toString('hex')], { type: 'text/plain' }) // eslint-disable-line
+                            function actualWrite() {
+                                fileWriter.onerror = callback
+                                // make sure we have an empty file
+                                // fileWriter.truncate(0)
+                                fireDestroyEndCB(fileWriter, callback);
+
+                                var blob
+                                if (typeof data === 'string') {
+                                    blob = new Blob([data], { type: 'text/plain' }) // eslint-disable-line
                                 } else {
-                                    blob = new Blob([data], { type: 'application/octet-binary' }) // eslint-disable-line
+                                    if (options.encoding === 'hex') {
+                                        // convert the hex data to a string then save it.
+                                        blob = new Blob([new Buffer(data, 'hex').toString('hex')], { type: 'text/plain' }) // eslint-disable-line
+                                    } else {
+                                        blob = new Blob([data], { type: 'application/octet-binary' }) // eslint-disable-line
+                                    }
                                 }
+
+                                if (flag.indexOf('a') > -1) fileWriter.seek(fileWriter.length);
+                                fileWriter.write(blob);
                             }
-                            fileWriter.write(blob)
-                        }, function (evt) {
-                            if (evt.type !== 'writeend') {
-                                callback(); //TODO: check if this is correct; have to send err
-                            } else {
-                                callback()
-                            }
-                        })
+
+                            if(needTruncate(fileWriter, flag)) exports.ftruncate(fileWriter, (err) => {
+                                if(!isNON(err)) return callback(err);
+                                actualWrite();
+                            });
+                            else actualWrite();
+
+                        }, callback);
                     } else {
                         var err = new Error()
                         err.code = 'UNKNOWN'
@@ -1279,16 +1272,9 @@ exports.appendFile = function (path, data, options, cb) {
                     // otherwise we get the file because 'standards'
                     if (flag === 'a') {
                         fileEntry.createWriter(function (fileWriter) {
-                            fileWriter.onerror = callback
-                            if (typeof callback === 'function') {
-                                fileWriter.onwriteend = function (evt) {
-                                    window.setTimeout(callback, 0, null, evt)
-                                }
-                            } else {
-                                fileWriter.onwriteend = function () { }
-                            }
-                            fileWriter.onprogress = function () { }
-                            fileWriter.seek(fileWriter.length)
+                            fireDestroyErrCB(fileWriter, callback);
+                            fireDestroyEndCB(fileWriter, callback);
+                            fileWriter.seek(fileWriter.length);
                             var blob = new Blob([data], { type: 'text/plain' }) // eslint-disable-line
                             fileWriter.write(blob)
                         }, callback)
@@ -1320,13 +1306,9 @@ exports.closeSync = (fd) => {
 
 exports.close = function (fd, callback) {
     delete fds[fd.key]
-    var cb = makeCallback(callback)
-    if (fd.readyState === 0) {
-        cb(null)
-    }
-    fd.onwriteend = function (progressinfo) {
-        cb(null, progressinfo)
-    }
+    let cb = makeCallback(callback)
+    if (fd.readyState !== 1 ) cb(null);
+    else fireDestroyEndCB(fd, callback);
 }
 
 exports.createReadStream = function (path, options) {

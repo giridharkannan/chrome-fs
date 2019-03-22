@@ -1,5 +1,6 @@
 window = typeof window === "undefined" ? self : window;
-require('tape').onFailure((err) => {
+let tape = require('tape');
+tape.onFailure((err) => {
     if(typeof err !== "undefined") console.error(err);
     else console.error('fail');
 })
@@ -31,19 +32,23 @@ rmDir = function (dirPath) {
 }
 if(typeof DedicatedWorkerGlobalScope !== "undefined") rmDir('/');
 
-require('../simple/test-fs-stat')
-require('../simple/test-fs-exists')
-require('../simple/test-fs-write-file')
-require('../simple/test-fs-append-file')
-require('../simple/test-fs-mkdir')
-require('../simple/test-fs-readdir')
-require('../simple/test-fs-write')
-require('../simple/test-fs-write-buffer')
-require('../simple/test-fs-read')
-require('../simple/test-fs-read-buffer')
-require('../simple/test-fs-read-stream-fd')
-require('../simple/test-fs-read-stream')
-require('../simple/test-fs-empty-read-stream')
+tape.onFinish(() => {
+    require('../simple/test-fs-stat')
+    require('../simple/test-fs-exists')
+    require('../simple/test-fs-write-file')
+    require('../simple/test-fs-append-file')
+    require('../simple/test-fs-mkdir')
+    require('../simple/test-fs-readdir')
+    require('../simple/test-fs-write')
+    require('../simple/test-fs-write-buffer')
+    require('../simple/test-fs-read')
+    require('../simple/test-fs-read-buffer')
+    require('../simple/test-fs-read-stream-fd')
+    require('../simple/test-fs-read-stream')
+    require('../simple/test-fs-empty-read-stream')
+    require('../libs/mkdirp-test')
+})
+
 require('../dat-test/mkdir')
 require('../dat-test/rmdir')
 require('../dat-test/write-stream')
@@ -62,7 +67,6 @@ require('../dat-test/ftruncate')
 require('../dat-test/write-file')
 require('../dat-test/write')
 require('../dat-test/fstat')
-require('../libs/mkdirp-test')
 require('../libs/https-test.js')
 
 // UI integration

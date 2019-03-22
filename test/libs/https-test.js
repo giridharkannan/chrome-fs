@@ -18,9 +18,10 @@ test('Download Tar', function (t) {
         fs.unlink(dllocation, function (err) {
           if (err) {
             console.log(err)
-            t.fail('Stat shouln\'t failed')
+            t.fail('Stat shouln\'t failed');
           } else {
-            console.log('https-test success')
+            console.log('https-test success');
+            t.end();
           }
         })
       })

@@ -66,27 +66,26 @@ test('write + partial Sync', (t) => {
 })
 
 test('write + partial', function (t) {
-  fs.open('/testpartial.txt', 'w', function (err, fd) {
-    t.notOk(err)
-    fs.write(fd, new Buffer('hello'), 0, 5, null, function (err, written, buf) {
-      t.notOk(err)
-      fs.write(fd, new Buffer(' world'), 0, 6, null, function (err, written, buf) {
-        t.ok(!err)
-        t.ok(buf)
-        t.same(written, 6)
-        fs.close(fd, function () {
-          fs.readFile('/testpartial.txt', 'utf-8', function (err, buf) {
+    fs.open('/testpartial.txt', 'w', function (err, fd) {
+        t.notOk(err)
+        fs.write(fd, new Buffer('hello'), 0, 5, null, function (err, written, buf) {
             t.notOk(err)
-            t.same(buf, 'hello world')
-            fs.unlink('/testpartial.txt', function (err) {
-              t.ok(!err, 'unlinked /testpartial.txt')
-              t.end()
+            fs.write(fd, new Buffer(' world'), 0, 6, null, function (err, written, buf) {
+                t.ok(!err, err)
+                t.ok(buf)
+                t.same(written, 6)
+                fs.readFile('/testpartial.txt', 'utf-8', function (err, buf) {
+                    t.notOk(err, err);
+                    if(err) return;
+                    t.same(buf, 'hello world')
+                    fs.unlink('/testpartial.txt', function (err) {
+                        t.ok(!err, 'unlinked /testpartial.txt '+err)
+                        t.end()
+                    })
+                })
             })
-          })
         })
-      })
     })
-  })
 })
 
 test('write + pos Sync 1', (t) => {
@@ -208,21 +207,21 @@ test('write + append', (t) => {
 })
 
 test('write + append', function (t) {
-  fs.writeFile('/testappend.txt', 'hello world', function () {
-    fs.open('/testappend.txt', 'a', function (err, fd) {
-      t.notOk(err)
-      fs.write(fd, new Buffer(' world'), 0, 6, null, function () {
-        fs.close(fd, function () {
-          fs.readFile('/testappend.txt', 'utf-8', function (err, buf) {
-            t.notOk(err)
-            t.same(buf, 'hello world world')
-            fs.unlink('/testappend.txt', function (err) {
-              t.ok(!err, 'unlinked /testappend.txt')
-              t.end()
+    fs.writeFile('/testappend.txt', 'hello world', function () {
+      fs.open('/testappend.txt', 'a', function (err, fd) {
+        t.notOk(err)
+        fs.write(fd, new Buffer(' world'), 0, 6, null, function () {
+          fs.close(fd, function () {
+            fs.readFile('/testappend.txt', 'utf-8', function (err, buf) {
+              t.notOk(err)
+              t.same(buf, 'hello world world')
+              fs.unlink('/testappend.txt', function (err) {
+                t.ok(!err, 'unlinked /testappend.txt')
+                t.end()
+              })
             })
           })
         })
       })
     })
-  })
 })

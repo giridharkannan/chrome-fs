@@ -81,3 +81,108 @@ test('open w+', function (t) {
     })
   })
 })
+
+test('open w already existing Sync', (t) => {
+    try {
+        let file = 'test4';
+        let expected = 'new content';
+
+        fs.writeFileSync(file, expected);
+        let stat = fs.statSync(file);
+
+        t.same(stat.size, expected.length, 'content length same');
+        let fd = fs.openSync(file, 'w');
+        t.same(typeof fd, 'object');
+        
+        stat = fs.statSync(file);
+        t.same(stat.size, 0, 'file truncated');
+
+        fs.unlinkSync(file);
+    } catch (err) {
+        t.ok(!err);
+    } finally {
+        t.end();
+    }
+})
+
+test('open w already existing', (t) => {
+    let file = 'test4';
+    let expected = 'd content';
+
+    fs.writeFile(file, expected, (err) => {
+        t.ok(!err, err);
+        fs.stat(file, (err, stat) => {
+            t.ok(!err);
+            t.same(stat.size, expected.length, 'content length same');
+            fs.open(file, 'w', (err, fd) => {
+                t.ok(!err);
+                t.same(typeof fd, 'object');
+
+                fs.stat(file, (err, stat) => {
+                    t.ok(!err, err);
+                    t.same(stat.size, 0, 'file truncated');
+
+                    fs.unlink(file, (err) => {
+                        t.ok(!err);
+                        t.end();
+                    })
+                })
+            })
+        })
+    })
+});
+
+test('open mode "a" already existing Sync', (t) => {
+    try {
+        let file = 'test4';
+        let expected = 'new content';
+
+        fs.writeFileSync(file, expected);
+        let actual = fs.readFileSync(file, 'utf8');
+        
+        t.same(actual, expected, 'content same');
+        let fd = fs.openSync(file, 'a');
+        t.same(typeof fd, 'object');
+
+        fs.writeSync(fd, ' append');
+        actual = fs.readFileSync(file, 'utf8');
+        t.same(actual, expected + ' append', 'content same');
+
+        fs.unlinkSync(file);
+    } catch (err) {
+        t.ok(!err);
+    } finally {
+        t.end();
+    }
+})
+
+test('open mode "a" already existing', (t) => {
+    let file = 'test4';
+    let expected = 'new content';
+
+    fs.writeFile(file, expected, (err) => {
+        t.ok(!err, err);
+        fs.readFile(file, 'utf8', (err, actual) => {
+            t.ok(!err, err);
+            t.same(actual, expected, 'content same');
+
+            fs.open(file, 'a', (err, fd) => {
+                t.ok(!err, err);
+                t.same(typeof fd, 'object');
+                fs.write(fd, ' append', (err) => {
+                    t.ok(!err, err);
+                    fs.readFile(file, 'utf8', (err, actual) => {
+                        t.ok(!err, err);
+                        t.same(actual, expected + ' append', 'content same');
+
+                        fs.unlink(file, (err) => {
+                            t.ok(!err);
+                            t.end();
+                        })
+                    })
+                })
+            })
+
+        })
+    });
+})

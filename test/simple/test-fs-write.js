@@ -34,21 +34,21 @@ fs.open(fn, 'w', '0644', function (err, fd) {
   fs.write(fd, '', 0, 'utf8', function (err, written) {
     assert.equal(err, null)
     assert.equal(0, written)
-  })
-  fs.write(fd, expected, 0, 'utf8', function (err, written) {
-    assert.equal(err, null)
-    assert.equal(Buffer.byteLength(expected), written)
-    fs.close(fd, function (err) {
-      assert.equal(err, null)
-      fs.readFile(fn, 'utf8', function (err, found) {
+    fs.write(fd, expected, 0, 'utf8', function (err, written) {
         assert.equal(err, null)
-        assert.equal(expected, found, 'Umlaut test')
-        fs.unlink(fn, function (err) {
+        assert.equal(Buffer.byteLength(expected), written)
+        fs.close(fd, function (err) {
           assert.equal(err, null)
-          console.log('test-fs-write 1 success')
+          fs.readFile(fn, 'utf8', function (err, found) {
+            assert.equal(err, null)
+            assert.equal(expected, found, 'Umlaut test')
+            fs.unlink(fn, function (err) {
+              assert.equal(err, null)
+              console.log('test-fs-write 1 success')
+            })
+          })
         })
       })
-    })
   })
 })
 
@@ -58,20 +58,20 @@ function (err, fd) {
   fs.write(fd, '', 0, 'utf8', function (err, written) {
     assert.equal(err, null)
     assert.equal(0, written)
-  })
-  fs.write(fd, expected, 0, 'utf8', function (err, written) {
-    assert.equal(err, null)
-    assert.equal(Buffer.byteLength(expected), written)
-    fs.close(fd, function (err) {
-      assert.equal(err, null)
-      fs.readFile(fn2, 'utf8', function (err, found) {
+    fs.write(fd, expected, 0, 'utf8', function (err, written) {
         assert.equal(err, null)
-        assert.equal(expected, found, 'Umlaut test')
-        fs.unlink(fn2, function (err) {
+        assert.equal(Buffer.byteLength(expected), written)
+        fs.close(fd, function (err) {
           assert.equal(err, null)
-          console.log('test-fs-write 2 success')
+          fs.readFile(fn2, 'utf8', function (err, found) {
+            assert.equal(err, null)
+            assert.equal(expected, found, 'Umlaut test')
+            fs.unlink(fn2, function (err) {
+              assert.equal(err, null)
+              console.log('test-fs-write 2 success')
+            })
+          })
         })
       })
-    })
   })
 })

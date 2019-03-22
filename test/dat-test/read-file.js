@@ -7,7 +7,7 @@ test('readFile Sync', (t) => {
         let fName = 'test.txt';
         fs.writeFileSync(fName, 'hello');
         let data = fs.readFileSync(fName);
-        t.ok(Buffer.isBuffer(data), 'Data is buffer');
+        t.ok(Buffer.isBuffer(data), 'Expected buffer ');
         t.same(data.toString(), 'hello');
         fs.unlinkSync(fName);
     } catch (err) {
@@ -61,15 +61,20 @@ test('cannot readFile dir', function (t) {
 test('readFile + encoding Sync', (t) => {
     let fName = 'foo.txt';
     try {
-        fs.writeFileSync(fName, 'hello');
+        let expected = '汉字漢字';
+        fs.writeFileSync(fName, expected);
 
         //hex
         let data = fs.readFileSync(fName, { encoding: 'hex' });
-        t.same(data, '68656c6c6f', 'hex is equal');
+        t.same(data, 'e6b189e5ad97e6bca2e5ad97', 'hex is equal');
 
-        //binary
+        //utf-8
+        data = fs.readFileSync(fName, 'utf8');
+        t.same(data, expected, 'UTF-8 same');
+
+        //empty
         data = fs.readFileSync(fName, { encoding: null });
-        t.same(data.toString(), 'hello', 'binary is equal');
+        t.same(data.toString(), expected, 'empty encoding is equal');
     } catch (err) {
         t.ok(!err, 'Got error ' + err);
     }
@@ -77,15 +82,32 @@ test('readFile + encoding Sync', (t) => {
 });
 
 test('readFile + encoding', function (t) {
-  fs.writeFile('/foo.txt', 'hello', function (err) {
-    t.ok(!err, 'Created File /foo')
-    fs.readFile('/foo.txt', 'hex', function (err, data) {
-      t.notOk(err, 'Error in hex')
-      t.same(data, '68656c6c6f', 'hex is equal')
-      fs.unlink('/foo.txt', function (err) {
-        t.ok(!err, 'unlinked /test.txt')
-        t.end()
-      })
+    let expected = 'hello';
+    fs.writeFile('/foo.txt', expected, function (err) {
+        t.ok(!err, 'Created File /foo')
+
+        //hex
+        fs.readFile('/foo.txt', 'hex', function (err, data) {
+            t.notOk(err, 'Error in hex')
+            t.same(data, '68656c6c6f', 'hex is equal')
+
+            //utf-8
+            fs.readFile('/foo.txt', 'utf-8', function (err, data) {
+                t.ok(!err, err);
+                t.same(data, expected, 'UTF-8 same');
+
+                //empty
+                fs.readFile('/foo.txt', { encoding: null }, (err, data) => {
+                    t.ok(!err, err);
+                    t.same(data.toString(), expected, 'empty encoding is equal');
+
+                    fs.unlink('/foo.txt', function (err) {
+                        t.ok(!err, 'unlinked /test.txt')
+                        t.end()
+                    })
+                })
+            });
+
+        })
     })
-  })
 })
