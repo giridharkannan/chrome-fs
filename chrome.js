@@ -434,22 +434,15 @@ exports.rename = function (oldPath, newPath, callback) {
             }
             cfs.root.getFile(oldPath, {},
                 function (fileEntry) {
-                    fileEntry.onerror = callback
-
                     cfs.root.getDirectory(toDirectory, {}, function (dirEntry) {
-                        fileEntry.moveTo(dirEntry, newName)
-                        callback()
+                        fileEntry.moveTo(dirEntry, newName, () => callback(null), callback);
                     }, callback)
                 }, function (err) {
                     // we need to move the directory instead
                     if (err.name === 'TypeMismatchError') {
                         cfs.root.getDirectory('/' + oldPath, {}, function (dirEntry) {
-                            dirEntry.moveTo(toDirectory, newName, function () {
-                                callback()
-                            }, function (err) {
-                                callback(err)
-                            })
-                        })
+                            dirEntry.moveTo(toDirectory, newName, () => callback(null), (err) => callback(err));
+                        }, callback);
                     } else {
                         callback(err)
                     }
@@ -510,57 +503,52 @@ exports.statSync = function (path) {
     let opts = {};
     try {
         let file = cfs.root.getFile(path, opts).file();
-        let statval = {
-            dev: 0,
-            mode: '0777',
-            nlink: 0,
-            uid: 0,
-            gid: 0,
-            rdev: 0,
-            ino: 0,
-            size: file.size,
-            atime: null,
-            mtime: file.lastModifiedDate,
-            ctime: null
-        }
-        statval.isDirectory = function () { return false }
-        statval.isFile = function () { return true }
-        statval.isSocket = function () { return false }
-        statval.isBlockDevice = function () { return false }
-        statval.isCharacterDevice = function () { return false }
-        statval.isFIFO = function () { return false }
-        statval.isSymbolicLink = function () { return false }
-        return statval;
+        return new Stats(true, file.size, file.lastModifiedDate);
     } catch (err) {
         if (err.name === 'TypeMismatchError') {
             cfs.root.getDirectory(path, opts); //Just to check if dir exist
-            var statval = {
-                dev: 0,
-                mode: '0777',
-                nlink: 0,
-                uid: 0,
-                gid: 0,
-                rdev: 0,
-                ino: 0,
-                size: 0,
-                atime: null,
-                mtime: new Date(0),
-                ctime: null,
-                blksize: -1,
-                blocks: -1
-            }
-            statval.isDirectory = function () { return true }
-            statval.isFile = function () { return false }
-            statval.isSocket = function () { return false }
-            statval.isBlockDevice = function () { return false }
-            statval.isCharacterDevice = function () { return false }
-            statval.isFIFO = function () { return false }
-            statval.isSymbolicLink = function () { return false }
-            return statval;
+            return new Stats(false, 0, new Date(0));
+        } else if(err.name === 'NotFoundError') {
+            throw createFSErr('ENOENT', path);
         }
         throw err;
     }
 }
+
+exports.Stats = Stats;
+
+function Stats(gFile, size, lastModified) {
+
+    if (!(this instanceof Stats)) {
+        return new Stats(isFile, size, lastModified)
+    }
+
+    this.gFile = gFile;
+    this.dev = 0;
+    this.mode = '0777';
+    this.nlink = 0;
+    this.uid = 0;
+    this.gid = 0;
+    this.rdev = 0;
+    this.ino = 0;
+    this.size = size;
+    this.atime = null;
+    this.mtime = lastModified;
+    this.ctime = null;
+    if (!gFile) {
+        this.blksize = -1;
+        this.blocks = -1;
+    }
+}
+
+Stats.prototype.isDirectory = function () { return !this.gFile; };
+Stats.prototype.isFile = function () { return this.gFile; };
+Stats.prototype.isSocket = function () { return false };
+Stats.prototype.isBlockDevice = function () { return false };
+Stats.prototype.isCharacterDevice = function () { return false };
+Stats.prototype.isFIFO = function () { return false };
+Stats.prototype.isSymbolicLink = function () { return false };
+
 
 exports.stat = function (path, callback) {
     path = resolve(path)
@@ -569,60 +557,30 @@ exports.stat = function (path, callback) {
             var opts = {}
             cfs.root.getFile(path, opts, function (fileEntry) {
                 fileEntry.file(function (file) {
-                    var statval = {
-                        dev: 0,
-                        mode: '0777',
-                        nlink: 0,
-                        uid: 0,
-                        gid: 0,
-                        rdev: 0,
-                        ino: 0,
-                        size: file.size,
-                        atime: null,
-                        mtime: file.lastModifiedDate,
-                        ctime: null
-                    }
-                    statval.isDirectory = function () { return false }
-                    statval.isFile = function () { return true }
-                    statval.isSocket = function () { return false }
-                    statval.isBlockDevice = function () { return false }
-                    statval.isCharacterDevice = function () { return false }
-                    statval.isFIFO = function () { return false }
-                    statval.isSymbolicLink = function () { return false }
-                    callback(null, statval)
+                    let statVal = new Stats(true, file.size, file.lastModifiedDate);
+                    callback(null, statVal);
                 })
             }, function (err) {
                 if (err.name === 'TypeMismatchError') {
                     cfs.root.getDirectory(path, opts, function (dirEntry) {
-                        var statval = {
-                            dev: 0,
-                            mode: '0777',
-                            nlink: 0,
-                            uid: 0,
-                            gid: 0,
-                            rdev: 0,
-                            ino: 0,
-                            size: 0,
-                            atime: null,
-                            mtime: new Date(0),
-                            ctime: null,
-                            blksize: -1,
-                            blocks: -1
-                        }
-                        statval.isDirectory = function () { return true }
-                        statval.isFile = function () { return false }
-                        statval.isSocket = function () { return false }
-                        statval.isBlockDevice = function () { return false }
-                        statval.isCharacterDevice = function () { return false }
-                        statval.isFIFO = function () { return false }
-                        statval.isSymbolicLink = function () { return false }
-                        callback(null, statval)
+                        let statVal = new Stats(false, 0, new Date(0));
+                        callback(null, statVal);
                     })
+                } else if(err.name === 'NotFoundError') {
+                    callback(createFSErr('ENOENT', path));
                 } else {
-                    callback(err)
+                    callback(err);
                 }
             })
         }, callback)
+}
+
+exports.lstatSync = (path) => {
+    return exports.statSync(path);
+}
+
+exports.lstat = (path, cb) => {
+    exports.stat(path, cb);
 }
 
 exports.fstatSync = (fd) => {
@@ -655,7 +613,7 @@ function createFD(file, fullPath, flags) {
 }
 
 function openFileSync(fileEntry, flags) {
-    if (flags.indexOf('w') > -1 || flags.indexOf('a') > -1) {
+    if (isFileModifyFlag(flags)) {
 
         let fileWriter = fileEntry.createWriter();
         if(needTruncate(fileWriter, flags)) exports.ftruncateSync(fileWriter);
@@ -675,7 +633,7 @@ exports.openSync = (path, flags, mode) => {
 
     try {
         let opts = {};
-        flags.indexOf('w') > -1 && (opts.create = true);
+        if(isFileModifyFlag(flags)) opts.create = true;
         flags.indexOf('x') > -1 && (opts.exclusive = true);
         let cfs = getSyncFS();
         let fileEntry = cfs.root.getFile(path, opts);
@@ -685,11 +643,15 @@ exports.openSync = (path, flags, mode) => {
         else if (err.name === 'TypeMismatchError' || err.name === 'SecurityError') {
             // Work around for directory file descriptor
             // It's a write on a directory
-            if (flags.indexOf('w') > -1) throw createFSErr('EISDIR');
+            if (isFileModifyFlag(flags)) throw createFSErr('EISDIR');
             else return { fullPath: path };
         } else if (err.name === 'InvalidModificationError') throw createFSErr('EEXIST');
         throw err;
     }
+}
+
+function isFileModifyFlag(flags) {
+    return flags.indexOf('w') > -1 || flags.indexOf('a') > -1;
 }
 
 function needTruncate(fileWriter, flags) {
@@ -706,19 +668,15 @@ exports.open = function (path, flags, mode, callback) {
     getAsyncFS(
         function (cfs) {
             var opts = {}
-            if (flags.indexOf('w') > -1) {
-                opts = { create: true }
-            }
-            if (flags.indexOf('x') > -1) {
-                opts.exclusive = true
-            }
+            if (isFileModifyFlag(flags)) opts = { create: true };
+            if (flags.indexOf('x') > -1) opts.exclusive = true;
             cfs.root.getFile(
                 path,
                 opts,
                 function (fileEntry) {
                     // if its a write then we get the file writer
                     // otherwise we get the file because 'standards'
-                    if (flags.indexOf('w') > -1 || flags.indexOf('a') > -1) {
+                    if (isFileModifyFlag(flags)) {
                         fileEntry.createWriter(function (fileWriter) {
                             function actualWork() {
                                 if(flags.indexOf('a') > -1) fileWriter.seek(fileWriter.length);
@@ -747,7 +705,7 @@ exports.open = function (path, flags, mode, callback) {
                     } else if (err.name === 'TypeMismatchError' || err.name === 'SecurityError') {
                         // Work around for directory file descriptor
                         // It's a write on a directory
-                        if (flags.indexOf('w') > -1) {
+                        if (isFileModifyFlag(flags) > -1) {
                             var eisdir = new Error()
                             eisdir.code = 'EISDIR'
                             callback(eisdir)
@@ -1110,7 +1068,7 @@ exports.writeFileSync = (path, data, options) => {
     let flag = options.flag || 'w';
     let cfs = getSyncFS();
     let opts = {};
-    if (flag.indexOf('w') > -1 || flag.indexOf('a') > -1) opts.create = true;
+    if (isFileModifyFlag(flag)) opts.create = true;
     else {
         let err = new Error();
         err.code = 'UNKNOWN';
@@ -1162,7 +1120,7 @@ exports.writeFile = function (path, data, options, cb) {
     getAsyncFS(
         function (cfs) {
             var opts = {}
-            if (flag.indexOf('w') > -1 || flag.indexOf('a')) {
+            if (isFileModifyFlag(flag)) {
                 opts = { create: true }
             }
             if (flag.indexOf('x') > -1) {
@@ -1174,7 +1132,7 @@ exports.writeFile = function (path, data, options, cb) {
                 function (fileEntry) {
                     // if its a write then we get the file writer
                     // otherwise we get the file because 'standards'
-                    if (flag.indexOf('w') > -1 || flag.indexOf('a') > -1) {
+                    if (isFileModifyFlag(flag)) {
                         fileEntry.createWriter(function (fileWriter) {
                             function actualWrite() {
                                 fileWriter.onerror = callback
@@ -1553,7 +1511,7 @@ WriteStream.prototype._write = function (data, encoding, callback) {
     this.fd.onerror = function (err) {
         if (err.name === 'TypeMismatchError') {
             // It's a write on a directory
-            if (self.flags.indexOf('w')) {
+            if (isFileModifyFlag(flags)) {
                 callback(createFSErr('EISDIR'))
             } else {
                 callback(err)
@@ -1590,19 +1548,21 @@ WriteStream.prototype._actualwrite = function (self, data, encoding, cb) {
 
 WriteStream.prototype.destroy = ReadStream.prototype.destroy
 WriteStream.prototype.close = function (cb) {
-    var self = this
-    if (cb) {
-        this.once('close', cb)
-    }
-    if (this.closed) {
-        this.emit('close')
-    }
-    this.closed = true
-    if (isNON(self.fd)) self.emit('close');
-    else {
-        exports.close(self.fd, () => { });
+    let self = this
+    if (cb) this.once('close', cb)
+    if (this.closed) return this.emit('close')
+    if(this.closeTriggered) return; //Already some 1 else had trigged it
+    
+    this.closeTriggered = true;
+    if (isNON(self.fd)) {
+        self.emit('close');
+        this.closed = true;
+    } else {
+        exports.close(self.fd, () => {
+            this.closed = true;
+            self.emit('close');
+        });
         self.fd = null;
-        self.emit('close')
     }
 }
 
